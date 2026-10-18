@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { supabase } from '@/lib/supabase'
@@ -6,6 +6,7 @@ import { fetchReportStockMoves, fetchReportWarehouseStock } from '@/modules/admi
 import type { ReportStockMoveRow, WarehouseStockRow } from '@/lib/database.types'
 import { cairoLocalToISO, formatDate, formatDateTime, formatNum } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 
 type Period = 'today' | '7' | '30' | 'custom'
 type ReportTab = 'expense' | 'stock' | 'moves'
@@ -88,18 +89,16 @@ export function ReportsPage() {
 
   const range = rangeFor(period, from, to)
 
-  useEffect(() => {
+  const loadData = useCallback((silent?: boolean) => {
     if (!range) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setError(null) }
     Promise.all([
       fetchReportStockMoves(cairoLocalToISO(`${range.from}T00:00`)!, cairoLocalToISO(`${range.to}T00:00`)!),
       fetchReportWarehouseStock(),
       supabase.from('settings').select('value').eq('key', 'currency').maybeSingle(),
     ])
       .then(([nextMoves, nextStock, settingResult]) => {
-        if (cancelled) return
         if (settingResult.error) throw new Error(settingResult.error.message)
         const value = settingResult.data?.value as unknown
         const configured = typeof value === 'string' ? value : value && typeof value === 'object' && 'currency' in value ? (value as CurrencySetting).currency : null
@@ -108,14 +107,16 @@ export function ReportsPage() {
         setCurrency(typeof configured === 'string' && configured.length === 3 ? configured : 'EGP')
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
+        if (!quiet) {
           setError(errorMessage(e))
           toast(errorMessage(e), 'error')
         }
       })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [range, reloadToken])
+      .finally(() => { if (!quiet) setLoading(false) })
+  }, [range])
+
+  useEffect(() => { loadData() }, [loadData, reloadToken])
+  useLiveRefresh(['stock_moves', 'cleaning_events', 'incidents', 'items'], () => loadData(true))
 
   const expenseRows = useMemo(() => {
     const grouped = new Map<string, ExpenseRow & { missingCost: boolean }>()

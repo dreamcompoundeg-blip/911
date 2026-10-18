@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchDocuments } from '@/modules/admin/api'
 import type { DocumentWithSupplier } from '@/lib/database.types'
 import { useI18n } from '@/i18n'
 import { formatDate } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 import { FileText, ChevronRight, Loader } from 'lucide-react'
 
 const PAGE_SIZE = 50
@@ -17,6 +18,7 @@ export function DocumentsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const pageRef = useRef(0)
 
   useEffect(() => {
     setLoading(true)
@@ -24,10 +26,26 @@ export function DocumentsPage() {
       .then((data) => {
         setDocs(data)
         setHasMore(data.length === PAGE_SIZE)
+        pageRef.current = 0
       })
       .catch((e) => toast(errorMessage(e), 'error'))
       .finally(() => setLoading(false))
   }, [filter])
+
+  const loadFirstPage = useCallback((silent?: boolean) => {
+    const quiet = silent === true
+    if (pageRef.current > 0) return
+    if (!quiet) setLoading(true)
+    fetchDocuments(filter, 0, PAGE_SIZE)
+      .then((data) => {
+        setDocs(data)
+        setHasMore(data.length === PAGE_SIZE)
+      })
+      .catch((e) => { if (!quiet) toast(errorMessage(e), 'error') })
+      .finally(() => { if (!quiet) setLoading(false) })
+  }, [filter])
+
+  useLiveRefresh(['documents'], () => loadFirstPage(true))
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
@@ -36,6 +54,7 @@ export function DocumentsPage() {
       const next = await fetchDocuments(filter, docs.length, PAGE_SIZE)
       setDocs((prev) => [...prev, ...next])
       setHasMore(next.length === PAGE_SIZE)
+      pageRef.current += 1
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {

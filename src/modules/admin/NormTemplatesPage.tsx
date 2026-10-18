@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchWarehouseStock, fetchTemplateNorms, upsertNormRule, deleteNormRule } from '@/modules/admin/api'
 import type { WarehouseStockRow, NormRuleRow, NormType, AptType, BaseUnit } from '@/lib/database.types'
 import { useI18n } from '@/i18n'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 import { ArrowLeft, Plus, Trash2, CreditCard as Edit3, X, Check } from 'lucide-react'
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
@@ -37,22 +38,29 @@ export function NormTemplatesPage() {
   const [editingNorm, setEditingNorm] = useState<NormRuleRow | null>(null)
   const [addingNormType, setAddingNormType] = useState<NormType | null>(null)
 
-  const loadNorms = (type: AptType) => {
-    setLoading(true)
-    setLoadError(null)
+  const loadNorms = useCallback((type: AptType, silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     fetchTemplateNorms(type)
-      .then(setNorms)
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
-  }
+      .then((data) => setNorms(data))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
+  }, [])
 
-  useEffect(() => {
+  const loadStock = useCallback(() => {
     fetchWarehouseStock().then(setStock).catch((e) => console.error(friendlyMessage(e)))
   }, [])
 
+  useEffect(() => { loadStock() }, [loadStock])
+
   useEffect(() => {
     loadNorms(selectedType)
-  }, [selectedType])
+  }, [selectedType, loadNorms])
+
+  useLiveRefresh(['norm_rules', 'items'], () => {
+    loadNorms(selectedType, true)
+    loadStock()
+  })
 
   const grouped = useMemo(() => {
     const map = new Map<NormType, NormRuleRow[]>()

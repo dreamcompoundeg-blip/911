@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   fetchDocumentMoves,
@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase'
 import { useI18n } from '@/i18n'
 import { formatDateTime, formatQty } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 import { ArrowLeft, Printer, Upload, Trash2, FileText, Loader as Loader2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 
@@ -44,10 +45,15 @@ export function DocumentDetailPage() {
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<AttachmentRow | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const loadedIdRef = useRef<string | null>(null)
 
-  useEffect(() => {
+  const loadAll = useCallback((silent?: boolean) => {
     if (!id) return
-    setLoading(true)
+    const quiet = silent === true
+    const isFirstLoad = loadedIdRef.current !== id
+    if (isFirstLoad && !quiet) {
+      setLoading(true)
+    }
     Promise.all([
       supabase.from('documents').select('id,doc_type,number,doc_date,supplier_id,status,note,total_cost,created_at').eq('id', id).single(),
       fetchDocumentMoves(id),
@@ -65,10 +71,14 @@ export function DocumentDetailPage() {
         setDoc(docRow)
         setMoves(mv as DocMoveRow[])
         setAttachments(atts)
+        loadedIdRef.current = id
       })
-      .catch((e) => toast(errorMessage(e), 'error'))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) toast(errorMessage(e), 'error') })
+      .finally(() => { if (isFirstLoad && !quiet) setLoading(false) })
   }, [id])
+
+  useEffect(() => { loadAll() }, [loadAll])
+  useLiveRefresh(['documents', 'stock_moves'], () => loadAll(true))
 
   const typeLabels: Record<string, string> = {
     receipt: t.admin.documents.receipt,

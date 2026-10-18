@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useI18n } from '@/i18n'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 import { Plus, Trash2, CreditCard as Edit3, MoveVertical as MoreVertical, RotateCcw, Copy, Download, Ban } from 'lucide-react'
 import type { NormRuleRow, NormType, Apartment, BaseUnit } from '@/lib/database.types'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -64,19 +65,27 @@ export function NormsTab({
   const [openMenu, setOpenMenu] = useState<NormType | null>(null)
   const [sectionLoading, setSectionLoading] = useState<NormType | null>(null)
 
-  const loadCatalog = () => {
-    setCatalogError(false)
+  const loadCatalog = useCallback((silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) setCatalogError(false)
     let cancelled = false
     fetchNormCatalog()
       .then((items) => { if (!cancelled) { setCatalog(items); setCatalogLoaded(true) } })
-      .catch((e) => { if (!cancelled) { setCatalogError(true); toast(friendlyMessage(e), 'error') } })
+      .catch((e) => { if (!cancelled) { if (!quiet) setCatalogError(true); toast(friendlyMessage(e), 'error') } })
     return () => { cancelled = true }
-  }
+  }, [])
 
   useEffect(() => {
     if (catalogLoaded) return
     return loadCatalog()
-  }, [catalogLoaded])
+  }, [catalogLoaded, loadCatalog])
+
+  useLiveRefresh(['norm_rules', 'items'], () => {
+    if (!editing && !copyModal && !confirmDelete && !confirmResetType && !confirmMaterializeType && !confirmReplaceCopy) {
+      onReload()
+      loadCatalog(true)
+    }
+  })
 
   const merged = useMemo(
     () => mergeNorms(templateNorms, overrideNorms),
@@ -243,7 +252,7 @@ export function NormsTab({
 
       {catalogError && !catalogLoaded && (
         <button
-          onClick={loadCatalog}
+          onClick={() => loadCatalog()}
           className="text-accent text-xs px-2 min-h-[44px]"
         >
           {t.retry}

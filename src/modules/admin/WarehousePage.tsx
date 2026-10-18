@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchWarehouseStock, fetchStockMoves } from '@/modules/admin/api'
 import type { WarehouseStockRow, StockMoveRow } from '@/lib/database.types'
 import { useI18n } from '@/i18n'
 import { formatQty, formatDateTime } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
+import { useLiveRefresh } from '@/lib/realtime'
 import { Search } from 'lucide-react'
 
 type KindFilter = 'all' | 'assets' | 'consumables'
@@ -32,12 +33,17 @@ export function WarehousePage() {
   const [searchParams] = useSearchParams()
   const belowOnly = searchParams.get('below') === '1'
 
-  useEffect(() => {
+  const loadStock = useCallback((silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) setLoading(true)
     fetchWarehouseStock()
-      .then(setStock)
-      .catch((error) => toast(errorMessage(error), 'error'))
-      .finally(() => setLoading(false))
+      .then((data) => setStock(data))
+      .catch((error) => { if (!quiet) toast(errorMessage(error), 'error') })
+      .finally(() => { if (!quiet) setLoading(false) })
   }, [])
+
+  useEffect(() => { loadStock() }, [loadStock])
+  useLiveRefresh(['stock_moves', 'items', 'locations'], () => loadStock(true))
 
   const categories = useMemo(() => {
     const set = new Set<string>()
