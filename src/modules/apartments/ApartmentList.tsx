@@ -10,6 +10,7 @@ import { Search, CircleCheck as CheckCircle2, ChevronRight, RefreshCw, Trash2, T
 import { ErrorState } from '@/components/ErrorState'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { friendlyMessage } from '@/lib/errors'
+import { useLiveRefresh } from '@/lib/realtime'
 
 const typeOrder: AptType[] = ['studio', '1br', '2br']
 
@@ -62,6 +63,10 @@ export function ApartmentList() {
     const unsub = subscribe(refresh)
     return unsub
   }, [profile])
+
+  useLiveRefresh(['apartments', 'cleaning_events', 'norm_rules'], () => {
+    if (profile) fetchApartments(profile.id).then(setApartments).catch(() => {})
+  })
 
   const handleRetry = async () => {
     if (!profile) return

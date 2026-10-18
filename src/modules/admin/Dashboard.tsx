@@ -8,6 +8,7 @@ import { formatQty } from '@/lib/format'
 import { TriangleAlert as AlertTriangle, TrendingDown, PackageX, ClipboardList, Boxes, Wrench, ArrowDownToLine, Trash2, CircleCheck as CheckCircle2, X, CheckCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ErrorState } from '@/components/ErrorState'
+import { useLiveRefresh } from '@/lib/realtime'
 
 function pctColor(p: number): string {
   if (p >= 100) return 'var(--ok)'
@@ -38,9 +39,9 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    setLoadError(false)
+  const loadData = useCallback(async (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(false) }
     try {
       const [to, ga, sh, ap, bl, inc] = await Promise.all([fetchToOrder(), fetchApartmentGaps(), fetchShortageEvents(), fetchApartmentsAdmin(), fetchBuildings(), fetchAllIncidents()])
       setToOrder(to)
@@ -50,13 +51,14 @@ export function Dashboard() {
       setBuildings(bl)
       setIncidents(inc)
     } catch {
-      setLoadError(true)
+      if (!quiet) setLoadError(true)
     } finally {
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+  useLiveRefresh(['incidents', 'apartments', 'buildings', 'events', 'stock_moves', 'items', 'norm_rules', 'cleaning_events'], () => { loadData(true) })
 
   const handleAck = async (id: number) => {
     try {

@@ -20,6 +20,7 @@ import { friendlyMessage } from '@/lib/errors'
 import { CleaningHistoryList } from '@/modules/history/CleaningHistoryList'
 import { IncidentHistoryList } from '@/modules/history/IncidentHistoryList'
 import { NormsTab } from './NormsTab'
+import { useLiveRefresh } from '@/lib/realtime'
 
 type Tab = 'norms' | 'cleaning' | 'incidents'
 
@@ -103,6 +104,7 @@ export function AdminApartmentDetail() {
   useEffect(() => {
     loadAll()
   }, [loadAll])
+  useLiveRefresh(['apartments', 'norm_rules', 'staff', 'items', 'cleaning_events', 'stock_moves'], () => loadAll({ silent: true }))
 
   const gapItems = useMemo(() => gaps.filter((g) => g.gap > 0), [gaps])
 

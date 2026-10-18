@@ -8,6 +8,7 @@ import { HistoryFilters } from './HistoryFilters'
 import { CleaningDetailSheet } from './CleaningDetailSheet'
 import type { SvCleaningEventRow, CleaningHistoryFilters as Filters } from './types'
 import { emptyCleaningFilters, PAGE_SIZE } from './types'
+import { useLiveRefresh } from '@/lib/realtime'
 
 interface Props {
   apartmentId?: number
@@ -41,9 +42,9 @@ export function CleaningHistoryList({ apartmentId, canDelete, onRecalculate, onR
     search: debouncedSearch,
   }
 
-  const load = useCallback(async (resetPage: boolean) => {
+  const load = useCallback(async (resetPage: boolean, silent = false) => {
     const p = resetPage ? 0 : pageRef.current + 1
-    if (resetPage) { pageRef.current = 0; setListLoading(true) } else { setLoadingMore(true) }
+    if (resetPage) { pageRef.current = 0; if (!silent) setListLoading(true) } else { setLoadingMore(true) }
     setError(null)
     const myReq = ++reqIdRef.current
     try {
@@ -75,6 +76,10 @@ export function CleaningHistoryList({ apartmentId, canDelete, onRecalculate, onR
   useEffect(() => {
     load(true)
   }, [apartmentId, debouncedSearch, filters.dateFrom, filters.dateTo, filters.hasMedia, filters.status, filters.leadStaff, refreshKey, load])
+
+  useLiveRefresh(['cleaning_events', 'cleaning_event_staff', 'cleaning_event_lines'], () => {
+    if (pageRef.current === 0) load(true, true)
+  })
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

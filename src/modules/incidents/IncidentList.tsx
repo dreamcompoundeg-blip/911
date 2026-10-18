@@ -10,6 +10,7 @@ import { friendlyMessage } from '@/lib/errors'
 import { ErrorState } from '@/components/ErrorState'
 import { Plus, Wrench, Package, CircleAlert as AlertCircle, ChevronRight, Image as ImageIcon } from 'lucide-react'
 import { IncidentDetailModal, fetchProfileName } from '@/modules/incidents/IncidentDetailModal'
+import { useLiveRefresh } from '@/lib/realtime'
 
 const statusColors: Record<IncidentStatus, string> = {
   new: 'bg-warn-soft text-warn',
@@ -45,20 +46,21 @@ export function IncidentList() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Incident | null>(null)
 
-  const loadAll = () => {
+  const loadAll = (silent?: boolean) => {
     if (!profile) return
-    setLoading(true)
-    setLoadError(null)
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     Promise.all([fetchMyIncidents(profile.id), fetchApartments(profile.id)])
       .then(([inc, apts]) => { setIncidents(inc); setApartments(apts) })
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => {
     loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id])
+  useLiveRefresh(['incidents', 'apartments'], () => loadAll(true))
 
   const aptMap = new Map(apartments.map((a) => [a.id, a.code]))
 

@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
 import { CleaningHistoryList } from '@/modules/history/CleaningHistoryList'
 import { IncidentHistoryList } from '@/modules/history/IncidentHistoryList'
+import { useLiveRefresh } from '@/lib/realtime'
 
 type Tab = 'norms' | 'comments' | 'cleaning' | 'incidents'
 
@@ -36,20 +37,21 @@ export function ApartmentDetail() {
   const [noteText, setNoteText] = useState('')
   const [sendingNote, setSendingNote] = useState(false)
 
-  const loadAll = () => {
+  const loadAll = (silent?: boolean) => {
     if (!aptId || !profile) return
-    setLoading(true)
-    setLoadError(null)
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     Promise.all([fetchApartmentById(aptId), fetchNorms(profile.id, aptId), fetchNotes(aptId)])
       .then(([a, n, no]) => { setApartment(a); setNorms(n); setNotes(no) })
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => {
     loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aptId, profile?.id])
+  useLiveRefresh(['apartments', 'apartment_notes', 'norm_rules', 'items', 'cleaning_events'], () => loadAll(true))
 
   const groupedNorms = useMemo(() => {
     const map = new Map<NormType, SvNorm[]>()

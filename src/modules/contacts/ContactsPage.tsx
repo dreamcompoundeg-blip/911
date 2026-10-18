@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n'
 import { Phone, MessageCircle, User } from 'lucide-react'
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
+import { useLiveRefresh } from '@/lib/realtime'
 
 export function ContactsPage() {
   const { t } = useI18n()
@@ -12,13 +13,14 @@ export function ContactsPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const load = () => {
-    setLoading(true)
-    setLoadError(null)
-    fetchContacts().then(setContacts).catch((e) => setLoadError(friendlyMessage(e))).finally(() => setLoading(false))
+  const load = (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
+    fetchContacts().then(setContacts).catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) }).finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
+  useLiveRefresh(['contacts'], () => load(true))
 
   const grouped = useMemo(() => {
     const map = new Map<string, Contact[]>()

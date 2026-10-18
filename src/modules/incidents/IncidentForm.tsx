@@ -10,7 +10,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { resolveMime, isHeicFile } from '@/lib/files'
 import { compressImage } from '@/lib/compress'
 import { currentDict } from '@/i18n'
-import { ArrowLeft, Camera, Video as VideoIcon, X, Loader as Loader2, TriangleAlert as AlertTriangle } from 'lucide-react'
+import { Camera, Video as VideoIcon, X, Loader as Loader2, TriangleAlert as AlertTriangle } from 'lucide-react'
 
 const MAX_FILES = 6
 const MAX_FILE_SIZE = 50 * 1024 * 1024

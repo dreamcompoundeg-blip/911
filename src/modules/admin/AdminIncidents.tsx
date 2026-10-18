@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { fetchAllIncidents, approveIncident } from '@/modules/admin/api'
 import { fetchApartmentsAdmin } from '@/modules/admin/api'
-import { supabase } from '@/lib/supabase'
 import type { Incident, Apartment, IncidentStatus, IncidentKind } from '@/lib/database.types'
 import { useI18n } from '@/i18n'
 import { formatDateTime } from '@/lib/format'
@@ -10,6 +9,7 @@ import { Wrench, Package, CircleAlert as AlertCircle, Check, X, Loader as Loader
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
 import { IncidentDetailModal, fetchProfileName } from '@/modules/incidents/IncidentDetailModal'
+import { useLiveRefresh } from '@/lib/realtime'
 
 const statusColors: Record<IncidentStatus, string> = {
   new: 'bg-warn-soft text-warn',
@@ -49,29 +49,21 @@ export function AdminIncidents() {
   const [authorName, setAuthorName] = useState<string | null>(null)
   const [resolverName, setResolverName] = useState<string | null>(null)
 
-  const load = () => {
-    setLoading(true)
-    setLoadError(null)
+  const load = (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     Promise.all([fetchAllIncidents(), fetchApartmentsAdmin()])
       .then(([inc, apts]) => { setIncidents(inc); setApartments(apts) })
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => {
     load()
-    const channel = supabase
-      .channel('admin-incidents')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incidents' }, () => { load() })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'incidents' }, () => { load() })
-      .subscribe()
-    const interval = setInterval(() => { if (document.visibilityState === 'visible') load() }, 30000)
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(interval)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useLiveRefresh(['incidents', 'apartments'], () => load(true))
 
   const aptMap = useMemo(() => new Map(apartments.map((a) => [a.id, a.code])), [apartments])
 

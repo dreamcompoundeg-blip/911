@@ -18,6 +18,7 @@ import { Plus, Trash2, CreditCard as Edit3, X, Check, ChevronRight, ChevronDown,
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
+import { useLiveRefresh } from '@/lib/realtime'
 
 const baseUnitOptions: BaseUnit[] = ['pcs', 'g', 'ml']
 export function CatalogPage() {
@@ -38,19 +39,20 @@ export function CatalogPage() {
   const [deleteCatTarget, setDeleteCatTarget] = useState<number | null>(null)
   const [deleteItemTarget, setDeleteItemTarget] = useState<number | null>(null)
 
-  const load = () => {
-    setLoading(true)
-    setLoadError(null)
+  const load = (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     Promise.all([fetchCategories(), fetchItems()])
       .then(([c, i]) => {
         setCategories(c)
         setItems(i)
       })
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
+  useLiveRefresh(['categories', 'items'], () => load(true))
 
   const itemsByCategory = useMemo(() => {
     const map = new Map<number, Item[]>()

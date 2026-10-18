@@ -7,6 +7,7 @@ import { Plus, Trash2, CreditCard as Edit3, X, Check, Phone } from 'lucide-react
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
+import { useLiveRefresh } from '@/lib/realtime'
 
 export function StaffPage() {
   const { t } = useI18n()
@@ -16,13 +17,14 @@ export function StaffPage() {
   const [editing, setEditing] = useState<Staff | null>(null)
   const [adding, setAdding] = useState(false)
 
-  const load = () => {
-    setLoading(true)
-    setLoadError(null)
-    fetchAllStaff().then(setStaff).catch((e) => setLoadError(friendlyMessage(e))).finally(() => setLoading(false))
+  const load = (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
+    fetchAllStaff().then(setStaff).catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) }).finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
+  useLiveRefresh(['staff'], () => load(true))
 
   if (loading) return <div className="px-4 pt-8 text-center text-muted">{t.app.loading}</div>
   if (loadError) return <ErrorState onRetry={load} />

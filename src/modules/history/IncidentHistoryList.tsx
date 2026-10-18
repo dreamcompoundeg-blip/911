@@ -9,6 +9,7 @@ import { IncidentDetailSheet } from './IncidentDetailSheet'
 import type { SvApartmentIncidentRow, IncidentHistoryFilters as Filters } from './types'
 import { emptyIncidentFilters, PAGE_SIZE } from './types'
 import type { IncidentKind, IncidentStatus } from '@/lib/database.types'
+import { useLiveRefresh } from '@/lib/realtime'
 
 interface Props {
   apartmentId?: number
@@ -40,9 +41,9 @@ export function IncidentHistoryList({ apartmentId, canDelete, refreshKey }: Prop
     search: debouncedSearch,
   }
 
-  const load = useCallback(async (resetPage: boolean) => {
+  const load = useCallback(async (resetPage: boolean, silent = false) => {
     const p = resetPage ? 0 : pageRef.current + 1
-    if (resetPage) { pageRef.current = 0; setListLoading(true) } else { setLoadingMore(true) }
+    if (resetPage) { pageRef.current = 0; if (!silent) setListLoading(true) } else { setLoadingMore(true) }
     setError(null)
     const myReq = ++reqIdRef.current
     try {
@@ -74,6 +75,10 @@ export function IncidentHistoryList({ apartmentId, canDelete, refreshKey }: Prop
   useEffect(() => {
     load(true)
   }, [apartmentId, debouncedSearch, filters.dateFrom, filters.dateTo, filters.hasMedia, filters.status, filters.kind, refreshKey, load])
+
+  useLiveRefresh(['incidents'], () => {
+    if (pageRef.current === 0) load(true, true)
+  })
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

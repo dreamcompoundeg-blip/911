@@ -15,20 +15,21 @@ import type { Incident, IncidentKind, IncidentStatus } from '@/lib/database.type
 import type { SvApartment, SvNorm, SvItem, ApartmentNote, Contact, NormType } from '@/lib/database.types'
 import { useAuth } from '@/modules/core/store'
 import { useI18n } from '@/i18n'
-import { supabase } from '@/lib/supabase'
 import { formatDateTime, isToday, formatQty } from '@/lib/format'
 import { toast, errorMessage } from '@/lib/toast'
 import { getOutboxSummary, getOutboxEntries, subscribe, flushOutbox, retryMediaEntry, discardMediaEntry, retryFailedEntry, deleteFailedEntry, type OutboxEntry } from '@/lib/outbox'
 import {
   CircleCheck as CheckCircle2, Wrench, Search, Send, Camera, Video, X, FileText,
   Loader as Loader2, MessageCircle, RefreshCw, ChevronRight, Image as ImageIcon,
-  History as HistoryIcon, Trash2,
+  Trash2,
 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { CleaningHistoryList } from '@/modules/history/CleaningHistoryList'
+import { useLiveRefresh } from '@/lib/realtime'
 
 const normTypeOrder: NormType[] = ['asset_standing', 'turnover_replenish', 'cleaning_consumption']
 
-type Tab = 'norms' | 'comments' | 'whatsapp' | 'incidents'
+type Tab = 'norms' | 'comments' | 'whatsapp' | 'history' | 'incidents'
 type DetailType = 'note' | 'incident'
 
 interface DetailState {
@@ -133,24 +134,10 @@ export function QrApartmentPage() {
     }
   }, [aptId, loadAll, profile])
 
-  useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible' && navigator.onLine) loadAll().catch(() => {}) }
-    window.addEventListener('focus', onVisible)
-    document.addEventListener('visibilitychange', onVisible)
-    const interval = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) loadAll().catch(() => {}) }, 20000)
-    const channel = supabase
-      .channel('qr-contacts')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'contacts' }, () => { loadAll().catch(() => {}) })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'contacts' }, () => { loadAll().catch(() => {}) })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'contacts' }, () => { loadAll().catch(() => {}) })
-      .subscribe()
-    return () => {
-      window.removeEventListener('focus', onVisible)
-      document.removeEventListener('visibilitychange', onVisible)
-      clearInterval(interval)
-      supabase.removeChannel(channel)
-    }
-  }, [loadAll])
+  useLiveRefresh(
+    ['apartments', 'apartment_notes', 'contacts', 'incidents', 'cleaning_events', 'items', 'norm_rules'],
+    () => { if (navigator.onLine) loadAll().catch(() => {}) },
+  )
 
   const itemCategoryMap = useMemo(() => {
     const map = new Map<number, string>()
@@ -313,6 +300,7 @@ export function QrApartmentPage() {
           <TabButton active={tab === 'norms'} onClick={() => setTab('norms')} label={t.qr.whatShouldBe} />
           <TabButton active={tab === 'comments'} onClick={() => setTab('comments')} label={t.qr.comments} />
           <TabButton active={tab === 'whatsapp'} onClick={() => setTab('whatsapp')} label={t.qr.whatsapp} />
+          <TabButton active={tab === 'history'} onClick={() => setTab('history')} label={t.qr.historyTab} />
           <TabButton active={tab === 'incidents'} onClick={() => setTab('incidents')} label={t.qr.incidentsTab} />
         </div>
       </div>
@@ -460,6 +448,8 @@ export function QrApartmentPage() {
           />
         )}
 
+        {tab === 'history' && <CleaningHistoryList apartmentId={aptId} canDelete={false} />}
+
         {tab === 'incidents' && (
           <div className="space-y-3">
             {incidents.length === 0 ? (
@@ -507,7 +497,7 @@ export function QrApartmentPage() {
 
       {/* Sticky bottom actions */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-surface/95 backdrop-blur border-t border-line px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-        <div className="max-w-lg mx-auto grid grid-cols-3 gap-2">
+        <div className="max-w-lg mx-auto grid grid-cols-2 gap-2">
           <button
             onClick={() => navigate(`/qr/${aptId}/clean`)}
             className="min-h-[48px] bg-accent text-white rounded-xl px-1 py-3 text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90"
@@ -521,13 +511,6 @@ export function QrApartmentPage() {
           >
             <Wrench className="w-5 h-5" />
             <span className="truncate">{t.qr.reportBreakdown}</span>
-          </button>
-          <button
-            onClick={() => navigate(`/qr/${aptId}/history`)}
-            className="min-h-[48px] bg-surface border border-line text-ink rounded-xl px-1 py-3 text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 transition-colors hover:bg-app"
-          >
-            <HistoryIcon className="w-5 h-5" />
-            <span className="truncate">{t.qr.historyTab}</span>
           </button>
         </div>
         {(pendingCount > 0 || failedCount > 0 || mediaPendingCount > 0 || mediaFailedCount > 0) && (
@@ -631,7 +614,6 @@ function DetailModal({
         <div className="sticky top-0 bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-ink">
             {state.type === 'note' && t.qr.comments}
-            {state.type === 'cleaning' && t.qr.historyTab}
             {state.type === 'incident' && t.qr.incidentsTab}
           </h3>
           <button onClick={onClose} className="p-1 -mr-1">

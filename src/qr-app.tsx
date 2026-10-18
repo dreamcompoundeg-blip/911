@@ -12,6 +12,7 @@ import { useAuth, setupAuthListener } from '@/modules/core/store'
 import { LoginScreen } from '@/modules/core/AuthScreens'
 import { useI18n, useDocumentDir } from '@/i18n'
 import { ToastContainer } from '@/lib/toast'
+import { PWAUpdateBanner } from '@/components/PWAUpdateBanner'
 import { Package, RefreshCw } from 'lucide-react'
 import { Suspense, useEffect, lazy } from 'react'
 
@@ -104,6 +105,7 @@ function QrApp() {
   return (
     <>
       {content}
+      <PWAUpdateBanner />
       <ToastContainer />
     </>
   )

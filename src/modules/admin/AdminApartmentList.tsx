@@ -6,6 +6,7 @@ import { useI18n } from '@/i18n'
 import { Search } from 'lucide-react'
 import { ErrorState } from '@/components/ErrorState'
 import { friendlyMessage } from '@/lib/errors'
+import { useLiveRefresh } from '@/lib/realtime'
 
 function pctColor(p: number): string {
   if (p >= 100) return 'var(--ok)'
@@ -41,20 +42,21 @@ export function AdminApartmentList() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const load = () => {
-    setLoading(true)
-    setLoadError(null)
+  const load = (silent?: boolean) => {
+    const quiet = silent === true
+    if (!quiet) { setLoading(true); setLoadError(null) }
     Promise.all([fetchApartmentsAdmin(), fetchBuildings(), fetchApartmentGaps()])
       .then(([a, b, g]) => {
         setApartments(a)
         setBuildings(b)
         setGaps(g)
       })
-      .catch((e) => setLoadError(friendlyMessage(e)))
-      .finally(() => setLoading(false))
+      .catch((e) => { if (!quiet) setLoadError(friendlyMessage(e)) })
+      .finally(() => { if (!quiet) setLoading(false) })
   }
 
   useEffect(() => { load() }, [])
+  useLiveRefresh(['apartments', 'buildings', 'cleaning_events', 'norm_rules', 'items', 'stock_moves'], () => load(true))
 
   const buildingMap = useMemo(() => new Map(buildings.map((b) => [b.id, b.name])), [buildings])
 
